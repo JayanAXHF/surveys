@@ -32,6 +32,7 @@ Rows:
 - [Contracts (pre/post condition)](https://doc.rust-lang.org/core/contracts/index.html)
 - [QNX Migrated to Higher Tier](https://doc.rust-lang.org/rustc/platform-support/nto-qnx.html)
 - [VxWorks Migrated to Higher Tier](https://doc.rust-lang.org/rustc/platform-support/vxworks.html)
+- [Reproducible Builds](https://github.com/rust-lang/rust/issues/129080)
 
 Columns:
 
