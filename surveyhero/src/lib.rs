@@ -1,8 +1,9 @@
 pub mod api;
+pub mod cli;
 pub mod markdown;
 pub mod render;
 
-use crate::{api::Question, markdown::Answers};
+use crate::{api::Question, cli::SharedArgs, markdown::Answers};
 impl markdown::Question<'_> {
     pub fn compare(&self, other: &Question) -> Comparison {
         if self.text != other.text() {
@@ -263,44 +264,4 @@ pub fn fetch_surveyhero_data(args: &SharedArgs) -> anyhow::Result<SurveyData> {
 pub struct SurveyData {
     pub main: Vec<Question>,
     pub secondary_languages: Vec<(String, Vec<Question>)>,
-}
-
-/// Verify the contents of the Annual Rust Survey on SurveyHero.
-#[derive(clap::Parser)]
-pub struct Args {
-    #[clap(subcommand)]
-    pub cmd: VerifierCmd,
-}
-
-#[derive(clap::Parser, Clone)]
-pub struct SharedArgs {
-    /// ID of the survey.
-    #[clap(long)]
-    pub survey_id: usize,
-    /// Survey path. Corresponds to a Markdown file or a directory relative to `../surveys/`.
-    #[clap(long)]
-    pub path: String,
-}
-
-#[derive(clap::Parser, Clone)]
-pub enum VerifierCmd {
-    /// Shows a diff with the local Markdown files and the SurveyHero content.
-    Check {
-        #[clap(flatten)]
-        shared: SharedArgs,
-    },
-    /// Downloads all Markdown files from SurveyHero (overwrites without asking)
-    Download {
-        #[clap(flatten)]
-        shared: SharedArgs,
-    },
-}
-
-impl VerifierCmd {
-    pub fn shared(&self) -> &SharedArgs {
-        match self {
-            VerifierCmd::Check { shared } => shared,
-            VerifierCmd::Download { shared } => shared,
-        }
-    }
 }

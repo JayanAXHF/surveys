@@ -2,9 +2,10 @@ use anyhow::Context;
 use clap::Parser;
 use std::io::ErrorKind;
 use std::path::PathBuf;
-use verifier::api::Question;
-use verifier::render::render_questions;
-use verifier::{fetch_surveyhero_data, markdown, Args, Comparison, VerifierCmd};
+use surveyhero::api::Question;
+use surveyhero::cli::Args;
+use surveyhero::render::render_questions;
+use surveyhero::{cli::VerifierCmd, fetch_surveyhero_data, markdown, Comparison};
 
 fn main() -> anyhow::Result<()> {
     env_logger::init();

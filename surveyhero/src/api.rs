@@ -102,7 +102,7 @@ impl Client {
             .send()?
             .error_for_status()?;
 
-        let elements: Elements = response.json()?;
+        let _elements: Elements = response.json()?;
 
         let elements = vec![Element::Text {
             text: "TODO".to_string(),
@@ -218,7 +218,7 @@ impl Question {
         normalize_surveyhero_text(match self {
             Self::ChoiceList {
                 description_text, ..
-            } => &description_text,
+            } => description_text,
             Self::Input {
                 description_text, ..
             } => description_text,
