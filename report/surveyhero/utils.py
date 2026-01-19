@@ -1,5 +1,7 @@
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Any
+
+import numpy as np
 
 from .survey import SurveyReport, SurveyFullAnswers
 
@@ -32,3 +34,7 @@ def print_answer_index(answers: SurveyFullAnswers, report: SurveyReport, path: P
             if any(question == q.question for q in report.questions) and index > 0:
                 print(file=f)
             print(f"{index}: {question}", file=f)
+
+
+def is_nan(value: Any) -> bool:
+    return isinstance(value, float) and np.isnan(value)

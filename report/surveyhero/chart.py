@@ -45,7 +45,8 @@ def make_bar_chart(
         layout_args: Optional[Dict[str, Any]] = None,
         legend_params: Optional[Dict[str, Any]] = None,
         sort_by_pct=True,
-        range=(0, 119)
+        range=(0, 119),
+        **kwargs
 ) -> Figure:
     """
     By default, the X axis is sorted in decreasing order by percentage counts.
@@ -157,6 +158,7 @@ def make_bar_chart(
         custom_data=["Year", "count"],
         category_orders={"answer": answers},
         height=height,
+        **kwargs
     )
     fig.update_traces(
         textposition="outside",
@@ -257,36 +259,6 @@ def make_pie_chart(
         textinfo="percent",
         hovertemplate="Answer: %{label}<br />Count: %{value} <br />Percent: %{customdata:.2f}%"
     )
-
-    legend = {}
-    # y=0,
-    # x=0,
-    # xref="container",
-    # yref="container",
-    # yanchor="top",
-    # xanchor="right",
-    if legend_params is not None:
-        legend.update(legend_params)
-
-    fig.update_layout(
-        meta="pie-chart",
-        hoverlabel=dict(
-            bgcolor="white",
-            font_size=16,
-            font_family="Rockwell",
-        ),
-        # showlegend=False,
-        showlegend=True,
-        legend=legend,
-        margin=dict(
-            l=0,
-            b=0,
-            pad=0
-        ),
-        dragmode="pan"
-    )
-
-    return fig
 
 
 def make_matrix_chart(
@@ -423,3 +395,108 @@ def make_wordcloud(answers: List[str], height=600) -> bytes:
         random_state=42
     ).generate(text)
     return pillow_to_png_bytes(wc.to_image())
+
+
+def make_histogram_chart(
+        question: Question,
+        height=800,
+        x_label: Optional[str] = None
+) -> Figure:
+    assert question.is_simple()
+    assert question.is_single_answer()
+
+    data = defaultdict(list)
+    for answer in question.kind.answers:
+        data["answer"].append(int(answer.answer))
+        data["count"].append(answer.count)
+
+    df = pd.DataFrame(data)
+    fig = px.histogram(
+        df,
+        x="answer",
+        y="count",
+        title=format_title(question),
+        height=height,
+        nbins=20,
+        labels={
+            "answer": x_label or "Answer",
+        }
+    )
+
+    fig.update_layout(
+        meta="histogram-chart",
+        hoverlabel=dict(
+            bgcolor="white",
+            font_size=16,
+            font_family="Rockwell",
+        ),
+        yaxis_title="Number of answers",
+        margin=dict(
+            l=0,
+            b=0,
+            pad=0
+        ),
+        dragmode="pan"
+    )
+
+    return fig
+
+
+def make_chart(
+        question: Question,
+        df: pd.DataFrame,
+        x: Optional[str] = None,
+        y: Optional[str] = None,
+        height=800,
+        xaxis_tickangle=0,
+        y_scale="linear",
+        kind="violin",
+        **chart_kwargs,
+) -> Figure:
+    """
+    Expects a long DataFrame.
+    """
+    if kind == "scatter":
+        func = px.scatter
+    elif kind == "box":
+        func = px.box
+    elif kind == "violin":
+        func = px.violin
+    elif kind == "bar":
+        func = px.bar
+    elif kind == "cdf":
+        func = px.ecdf
+    else:
+        raise Exception(f"Unknown chart kind `{kind}`")
+
+    assert x is not None or y is not None
+
+    fig = func(
+        df,
+        x=x,
+        y=y,
+        title=format_title(question),
+        height=height,
+        **chart_kwargs
+    )
+
+    fig.update_xaxes(tickangle=xaxis_tickangle)
+    fig.update_yaxes(type=y_scale)
+
+    fig.update_layout(
+        meta=f"{kind}-chart",
+        hoverlabel=dict(
+            bgcolor="white",
+            font_size=16,
+            font_family="Rockwell",
+        ),
+        margin=dict(
+            l=0,
+            b=0,
+            t=150,
+            pad=0
+        ),
+        dragmode="pan"
+    )
+
+    return fig

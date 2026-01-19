@@ -2,12 +2,16 @@ import csv
 import re
 from collections import defaultdict
 from pathlib import Path
+from typing import Optional
+
+import pandas as pd
 
 from .survey import SurveyFullAnswers, Question, MatrixQuestion, Answer, SimpleQuestion, \
     SurveyReport, RatingQuestion, RatingAnswer
 
 
-def parse_surveyhero_answers(path: Path, year: int) -> SurveyFullAnswers:
+def parse_surveyhero_answers(path: Path, year: int,
+                             summary: Optional[SurveyReport] = None) -> SurveyFullAnswers:
     """
     Parses the full CSV from SurveyHero,
     which contains all responses from individual respondents (except
@@ -30,7 +34,9 @@ def parse_surveyhero_answers(path: Path, year: int) -> SurveyFullAnswers:
         year=year,
         answers=answers,
         questions=questions,
-        total_respondents=total_respondents
+        total_respondents=total_respondents,
+        df=pd.read_csv(path),
+        summary=summary
     )
 
 

@@ -1,6 +1,9 @@
 import dataclasses
-from typing import List, Union, Dict, Optional, Callable
+import re
+from collections import defaultdict
+from typing import List, Union, Dict, Optional, Callable, Iterable
 
+import numpy as np
 import pandas as pd
 
 
@@ -108,6 +111,33 @@ class Question:
         assert orig_count == sum(a.count for a in answers)
         return dataclasses.replace(self, kind=SimpleQuestion(answers=answers))
 
+    def integer_answers(self) -> "Question":
+        assert self.is_simple()
+        return dataclasses.replace(self, kind=SimpleQuestion(answers=[
+            Answer(answer=str(int(float(answer.answer))), count=answer.count) for answer in
+            self.kind.answers
+        ]))
+
+    def expand_answers(self, func: Callable[[str], Iterable[str]]) -> "Question":
+        assert self.is_simple()
+
+        answers = defaultdict(int)
+        for answer in self.kind.answers:
+            for answer in list(func(answer.answer)):
+                answers[answer] += 1
+        return dataclasses.replace(self, kind=SimpleQuestion(answers=[
+            Answer(answer, count) for (answer, count) in sorted(answers.items(), key=lambda i: i[0])
+        ]))
+
+    def filter_answers(self, func: Callable[[Answer], bool]) -> "Question":
+        assert self.is_simple()
+
+        answers = []
+        for answer in self.kind.answers:
+            if func(answer):
+                answers.append(answer)
+        return dataclasses.replace(self, kind=SimpleQuestion(answers=answers))
+
     def rename_answers(self, diff: Dict[str, Optional[str]]) -> "Question":
         return dataclasses.replace(self, kind=self.kind.rename_answers(diff))
 
@@ -168,6 +198,13 @@ class SurveyReport:
         return self.questions[index]
 
 
+@dataclasses.dataclass()
+class Column:
+    name: str
+    index: int
+    data: pd.Series
+
+
 @dataclasses.dataclass
 class SurveyFullAnswers:
     year: int
@@ -175,6 +212,161 @@ class SurveyFullAnswers:
     answers: Dict[int, List[str]]
     questions: List[str]
     total_respondents: int
+    df: pd.DataFrame
+    summary: Optional[SurveyReport] = None
+
+    def q_simple_single(self, question_or_id: int | str,
+                        treat_unknown_answers_as: Optional[str] = "Other") -> Question:
+        col = self.get_column(question_or_id)
+        response_count = np.sum(col.data.count())
+
+        ref_question = self.get_summary_question(col.name)
+        if ref_question is not None:
+            assert ref_question.is_simple() and ref_question.is_single_answer()
+
+        counts = dict(col.data.value_counts())
+
+        answers = self.sort_answers(counts, col)
+        question = Question(
+            id=col.index,
+            year=self.year,
+            question=col.name,
+            total_responses=response_count,
+            kind=SimpleQuestion(
+                answers=answers
+            )
+        )
+        if treat_unknown_answers_as is not None and self.get_summary_question(col.name) is not None:
+            question = self.treat_unknown_answers_as(
+                question,
+                treat_unknown_answers_as=treat_unknown_answers_as
+            )
+        return question
+
+    def q_simple_multi(self, question_or_id: int | str,
+                       answer_count: Optional[int] = None) -> Question:
+        col = self.get_column(question_or_id)
+        answer_data = self.get_answer_columns(col, answer_count=answer_count)
+        for c in answer_data.columns:
+            assert not c.endswith("?")
+        non_na_answers = answer_data.apply(lambda r: r.count(), axis=1)
+        response_count = len(non_na_answers[non_na_answers != 0])
+
+        ref_question = self.get_summary_question(col.name)
+        if ref_question is not None:
+            assert ref_question.is_simple() and not ref_question.is_single_answer()
+
+        counts = dict(answer_data.count())
+        answers = self.sort_answers(counts, col)
+        return Question(
+            id=col.index,
+            year=self.year,
+            question=col.name,
+            total_responses=response_count,
+            kind=SimpleQuestion(
+                answers=answers
+            )
+        )
+
+    def open_answers(self, question_or_id: int | str) -> List[str]:
+        col = self.get_column(question_or_id)
+        ref_question = self.get_summary_question(col.name)
+        assert ref_question is not None
+        assert ref_question.is_simple()
+
+        if ref_question.is_single_answer():
+            known_answers = set(answer.answer for answer in ref_question.kind.answers)
+            answer_data = list(self.df[col.name].dropna())
+            return [answer for answer in answer_data if answer not in known_answers]
+        else:
+            answer_data = self.get_answer_columns(col, answer_count=None)
+            answer_data = answer_data.rename(columns={
+                k: normalize_answer_other(k)
+                for k in answer_data.columns.values
+            })
+            return list(answer_data["Other"].dropna())
+
+    def open_answers_raw(self, question_or_id: int | str, dropna=True) -> List[str]:
+        df = self.df[self.get_column(question_or_id).name]
+        if dropna:
+            df = df.dropna()
+        return list(df)
+
+    def treat_unknown_answers_as(self, question: Question, treat_unknown_answers_as: str):
+        assert question.is_simple()
+
+        answer_map = {answer.answer: index for (index, answer) in enumerate(question.kind.answers)}
+        if treat_unknown_answers_as not in answer_map:
+            answer_map[treat_unknown_answers_as] = len(answer_map)
+
+        ref_question = self.get_summary_question(question.question)
+        assert ref_question is not None
+        ref_keys = set([answer.answer for answer in ref_question.kind.answers])
+
+        counts = {answer.answer: answer.count for answer in question.kind.answers}
+        unknown_keys = [k for k in counts if k not in ref_keys]
+        other_count = counts.get(treat_unknown_answers_as, 0)
+        for key in unknown_keys:
+            other_count += counts.pop(key)
+        if other_count > 0:
+            counts[treat_unknown_answers_as] = other_count
+        answers = sorted(counts.items(), key=lambda i: answer_map[i[0]])
+        return dataclasses.replace(question, kind=SimpleQuestion(
+            answers=[Answer(answer=answer, count=count) for
+                     (answer, count) in answers]))
+
+    def get_answer_columns(self, col: Column, answer_count: Optional[int]) -> pd.DataFrame:
+        ref_question = self.get_summary_question(col.name)
+        if answer_count is None:
+            if ref_question is None:
+                raise Exception(
+                    f"Must provide either `answer_count` or a summary thas has the question `{col.name}`")
+            assert ref_question.is_simple()
+            answer_count = len(ref_question.kind.answers)
+
+        return self.df.iloc[:, col.index + 1:col.index + 1 + answer_count]
+
+    def get_column(self, question_or_id: int | str) -> Column:
+        if isinstance(question_or_id, int):
+            col_name = self.df.iloc[:, question_or_id].name
+            col_index = question_or_id
+        else:
+            col_name = question_or_id
+            col_index = self.df.columns.get_loc(question_or_id)
+        col_data = self.df[col_name]
+        return Column(name=col_name, index=col_index, data=col_data)
+
+    def get_summary_question(self, col_name: str) -> Optional[Question]:
+        if self.summary is not None:
+            ref_questions = [q for q in self.summary.questions if q.question == col_name]
+            if ref_questions:
+                assert len(ref_questions) == 1
+                return ref_questions[0]
+        return None
+
+    def sort_answers(self, counts: Dict[str, int], col: Column) -> List[Answer]:
+        ref_question = self.get_summary_question(col.name)
+        answer_map = {}
+        if ref_question is not None:
+            assert isinstance(ref_question.kind, SimpleQuestion)
+            answer_map = {a.answer: i for (i, a) in enumerate(ref_question.kind.answers)}
+
+        answers = [(normalize_answer_other(str(answer)), count) for (answer, count) in
+                   counts.items()]
+        for (index, (answer, _)) in enumerate(answers):
+            if answer not in answer_map:
+                answer_map[answer] = index
+        answers = sorted(answers, key=lambda i: answer_map[i[0]])
+        return [Answer(answer=str(answer), count=count) for (answer, count) in answers]
+
+
+OTHER_REGEX = re.compile("^Other(\.\d+)?$")
+
+
+def normalize_answer_other(answer: str) -> str:
+    if OTHER_REGEX.match(answer) is not None:
+        return "Other"
+    return answer
 
 
 def normalize_open_answers(answers: List[str], replace_spaces=False) -> List[str]:
