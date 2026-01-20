@@ -10,8 +10,8 @@ pub fn parse(markdown: &str) -> anyhow::Result<Vec<Question<'_>>> {
         .filter(|l| !l.is_empty())
         .filter(|l| !l.starts_with(">"))
     {
-        if line.starts_with("###") {
-            let old_state = std::mem::replace(&mut state, ParserState::Text(&line[3..].trim()));
+        if let Some(text) = line.strip_prefix("###") {
+            let old_state = std::mem::replace(&mut state, ParserState::Text(text.trim()));
             match old_state {
                 ParserState::Question(q) if !q.is_empty() => questions.push(q),
                 ParserState::None => {}
@@ -29,9 +29,9 @@ pub fn parse(markdown: &str) -> anyhow::Result<Vec<Question<'_>>> {
                     bail!("matrix question without second half of answers '{}'", q)
                 }
             }
-        } else if line.starts_with("Type: ") {
+        } else if let Some(stripped_text) = line.strip_prefix("Type: ") {
             if let ParserState::Text(text) = state {
-                let typ = &line[6..].trim();
+                let typ = stripped_text.trim();
                 state = if typ.starts_with("select one") {
                     ParserState::Question(Question {
                         text,
@@ -73,12 +73,12 @@ pub fn parse(markdown: &str) -> anyhow::Result<Vec<Question<'_>>> {
                     state
                 );
             }
-        } else if line.starts_with("-") {
+        } else if let Some(stripped_text) = line.strip_prefix("-") {
             match &mut state {
                 ParserState::Question(Question {
                     answers: Answers::SelectOne(ref mut a),
                     ..
-                }) => a.push(trim_answer(line[1..].trim())),
+                }) => a.push(trim_answer(stripped_text.trim())),
                 ParserState::Question(Question {
                     answers: Answers::SelectMany(ref mut a),
                     ..
@@ -90,7 +90,7 @@ pub fn parse(markdown: &str) -> anyhow::Result<Vec<Question<'_>>> {
                 | ParserState::Question(Question {
                     answers: Answers::InputList(ref mut a),
                     ..
-                }) => a.push(trim_answer(line[1..].trim())),
+                }) => a.push(trim_answer(stripped_text.trim())),
                 ParserState::Question(Question {
                     answers:
                         Answers::Matrix {
@@ -98,10 +98,10 @@ pub fn parse(markdown: &str) -> anyhow::Result<Vec<Question<'_>>> {
                         },
                     ..
                 }) => {
-                    answers2.push(trim_answer(line[1..].trim()));
+                    answers2.push(trim_answer(stripped_text.trim()));
                 }
                 ParserState::HalfMatrix { answers, .. } => {
-                    answers.push(trim_answer(line[1..].trim()));
+                    answers.push(trim_answer(stripped_text.trim()));
                 }
                 _ => {
                     //     bail!("illegal state. found answer when state is {:?}", state)
@@ -270,5 +270,5 @@ fn trim_answer(answer: &str) -> &str {
     } else {
         return answer;
     };
-    &answer[..i].trim()
+    answer[..i].trim()
 }

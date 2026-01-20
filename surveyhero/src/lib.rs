@@ -1,111 +1,11 @@
-use crate::api::Question;
-use crate::markdown::Answers;
-use crate::render::render_questions;
-use anyhow::Context;
-use clap::Parser;
-use std::io::ErrorKind;
-use std::path::PathBuf;
+pub mod api;
+pub mod cli;
+pub mod markdown;
+pub mod render;
 
-mod api;
-mod markdown;
-mod render;
-
-fn main() -> anyhow::Result<()> {
-    env_logger::init();
-
-    let args = Args::parse();
-    let online_data = fetch_surveyhero_data(args.cmd.shared())?;
-
-    let base_path = PathBuf::from(format!("../surveys/{}", args.cmd.shared().path));
-    let pairs = if base_path.is_dir() {
-        let mut pairs = vec![(base_path.join("questions.md"), online_data.main)];
-        for (language, questions) in online_data.secondary_languages {
-            pairs.push((
-                base_path
-                    .join("translations")
-                    .join(language)
-                    .with_extension("md"),
-                questions,
-            ));
-        }
-        pairs
-    } else {
-        vec![(base_path, online_data.main)]
-    };
-
-    match args.cmd {
-        VerifierCmd::Check { .. } => {
-            for (path, questions) in pairs {
-                println!("-----\nChecking {}\n", path.display());
-
-                let markdown = match std::fs::read_to_string(&path) {
-                    Ok(markdown) => markdown,
-                    Err(error) if error.kind() == ErrorKind::NotFound => {
-                        eprintln!(
-                            "{} not found, creating it with data from SurveyHero",
-                            path.display()
-                        );
-                        render_questions(&questions, &path)?;
-                        std::fs::read_to_string(&path)?
-                    }
-                    Err(e) => return Err(e.into()),
-                };
-                let markdown_questions = markdown::parse(&markdown)
-                    .with_context(|| format!("Cannot parse {} as Markdown", path.display()))?;
-                check_questions(&markdown_questions, &questions);
-            }
-        }
-        VerifierCmd::Download { .. } => {
-            for (path, questions) in pairs {
-                // Do not overwrite the English version, as it contains special metadata and
-                // comments
-                if path
-                    .file_name()
-                    .map(|p| p != "questions.md")
-                    .unwrap_or(true)
-                {
-                    render_questions(&questions, &path)?;
-                }
-            }
-        }
-    }
-
-    Ok(())
-}
-
-fn check_questions(markdown_questions: &[markdown::Question], sh_questions: &[Question]) {
-    for (online, markdown) in markdown_questions.iter().zip(sh_questions.iter()) {
-        let comparison = online.compare(markdown);
-        if !matches!(comparison, Comparison::Equal) {
-            println!("Q: '{}'", online.text);
-            println!("  {:#?}", comparison);
-        }
-    }
-
-    if markdown_questions.len() > sh_questions.len() {
-        println!(
-            "Missing questions in the online version:\n{}",
-            markdown_questions[sh_questions.len()..]
-                .iter()
-                .map(|q| q.text)
-                .collect::<Vec<_>>()
-                .join("\n-")
-        );
-    }
-    if sh_questions.len() > markdown_questions.len() {
-        println!(
-            "Missing questions in the markdown version:\n-{}",
-            sh_questions[markdown_questions.len()..]
-                .iter()
-                .map(|q| q.text())
-                .collect::<Vec<_>>()
-                .join("\n-")
-        );
-    }
-}
-
+use crate::{api::Question, cli::SharedArgs, markdown::Answers};
 impl markdown::Question<'_> {
-    fn compare(&self, other: &Question) -> Comparison {
+    pub fn compare(&self, other: &Question) -> Comparison {
         if self.text != other.text() {
             return Comparison::TitlesDiffer {
                 md: self.text.to_owned(),
@@ -126,7 +26,7 @@ impl markdown::Question<'_> {
             (markdown::Answers::SelectOne(answers), Question::ChoiceList { choice_list, .. })
                 if other.is_select_one() =>
             {
-                let mismatched = choice_list.mismatched_answers(&answers);
+                let mismatched = choice_list.mismatched_answers(answers);
                 if !mismatched.is_empty() {
                     return Comparison::AnswersDiffer(
                         mismatched
@@ -142,7 +42,7 @@ impl markdown::Question<'_> {
             (markdown::Answers::SelectMany(answers), Question::ChoiceList { choice_list, .. })
                 if other.is_select_many() =>
             {
-                let mismatched = choice_list.mismatched_answers(&answers);
+                let mismatched = choice_list.mismatched_answers(answers);
                 if !mismatched.is_empty() {
                     return Comparison::AnswersDiffer(
                         mismatched
@@ -161,7 +61,7 @@ impl markdown::Question<'_> {
                 },
                 Question::ChoiceTable { choice_table, .. },
             ) => {
-                let mismatched_rows = choice_table.mismatched_rows(&answers1);
+                let mismatched_rows = choice_table.mismatched_rows(answers1);
                 if !mismatched_rows.is_empty() {
                     return Comparison::MatrixAnswersDiffer(
                         mismatched_rows
@@ -173,7 +73,7 @@ impl markdown::Question<'_> {
                             .collect(),
                     );
                 }
-                let mismatched_columns = choice_table.mismatched_columns(&answers2);
+                let mismatched_columns = choice_table.mismatched_columns(answers2);
                 if !mismatched_columns.is_empty() {
                     return Comparison::MatrixAnswersDiffer(
                         mismatched_columns
@@ -188,7 +88,7 @@ impl markdown::Question<'_> {
             }
             (markdown::Answers::RatingScale, Question::RatingScale { .. }) => {}
             (markdown::Answers::Ranking(answers), Question::Ranking { ranking, .. }) => {
-                let mismatched = ranking.mismatched_answers(&answers);
+                let mismatched = ranking.mismatched_answers(answers);
                 if !mismatched.is_empty() {
                     return Comparison::AnswersDiffer(
                         mismatched
@@ -202,7 +102,7 @@ impl markdown::Question<'_> {
                 }
             }
             (Answers::InputList(answers), Question::InputList { input_list, .. }) => {
-                let mismatched = input_list.mismatched_answers(&answers);
+                let mismatched = input_list.mismatched_answers(answers);
                 if !mismatched.is_empty() {
                     return Comparison::AnswersDiffer(
                         mismatched
@@ -230,14 +130,14 @@ impl markdown::Question<'_> {
 
 #[allow(dead_code)]
 #[derive(Debug)]
-struct AnswerDiff {
+pub struct AnswerDiff {
     md: String,
     sh: String,
 }
 
 #[allow(dead_code)]
 #[derive(Debug)]
-enum Comparison {
+pub enum Comparison {
     TitlesDiffer {
         md: String,
         sh: String,
@@ -253,7 +153,7 @@ enum Comparison {
 }
 
 #[derive(Debug)]
-enum QuestionType {
+pub enum QuestionType {
     FreeForm,
     SelectOne,
     SelectMany,
@@ -263,7 +163,7 @@ enum QuestionType {
     InputList,
 }
 
-impl<'a> From<&'a Question> for QuestionType {
+impl From<&Question> for QuestionType {
     fn from(q: &Question) -> Self {
         if q.is_select_one() {
             return QuestionType::SelectOne;
@@ -322,7 +222,7 @@ fn get_creds_from_env() -> SHCreds {
     SHCreds { username, password }
 }
 
-fn fetch_surveyhero_data(args: &SharedArgs) -> anyhow::Result<SurveyData> {
+pub fn fetch_surveyhero_data(args: &SharedArgs) -> anyhow::Result<SurveyData> {
     let creds = get_creds_from_env();
     let mut client = api::Client::new(creds.username, creds.password);
     let surveys = client.fetch_surveys()?;
@@ -361,47 +261,7 @@ fn fetch_surveyhero_data(args: &SharedArgs) -> anyhow::Result<SurveyData> {
 }
 
 #[derive(Debug)]
-struct SurveyData {
-    main: Vec<Question>,
-    secondary_languages: Vec<(String, Vec<Question>)>,
-}
-
-/// Verify the contents of the Annual Rust Survey on SurveyHero.
-#[derive(clap::Parser)]
-struct Args {
-    #[clap(subcommand)]
-    cmd: VerifierCmd,
-}
-
-#[derive(clap::Parser, Clone)]
-struct SharedArgs {
-    /// ID of the survey.
-    #[clap(long)]
-    survey_id: usize,
-    /// Survey path. Corresponds to a Markdown file or a directory relative to `../surveys/`.
-    #[clap(long)]
-    path: String,
-}
-
-#[derive(clap::Parser, Clone)]
-enum VerifierCmd {
-    /// Shows a diff with the local Markdown files and the SurveyHero content.
-    Check {
-        #[clap(flatten)]
-        shared: SharedArgs,
-    },
-    /// Downloads all Markdown files from SurveyHero (overwrites without asking)
-    Download {
-        #[clap(flatten)]
-        shared: SharedArgs,
-    },
-}
-
-impl VerifierCmd {
-    fn shared(&self) -> &SharedArgs {
-        match self {
-            VerifierCmd::Check { shared } => shared,
-            VerifierCmd::Download { shared } => shared,
-        }
-    }
+pub struct SurveyData {
+    pub main: Vec<Question>,
+    pub secondary_languages: Vec<(String, Vec<Question>)>,
 }
