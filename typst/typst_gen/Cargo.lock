@@ -3646,7 +3646,6 @@ dependencies = [
  "log",
  "miette",
  "tar",
- "thiserror",
  "time",
  "typst",
  "typst-kit",
