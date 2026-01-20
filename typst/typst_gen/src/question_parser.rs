@@ -1,7 +1,7 @@
 use std::fmt::Write;
 
 use color_eyre::eyre::eyre;
-use verifier::{
+use surveyhero::{
     api::Question,
     markdown::{Answers, parse},
 };
@@ -31,7 +31,7 @@ impl TypstWriter {
         Ok(())
     }
     pub fn write_md(
-        questions: &[verifier::markdown::Question],
+        questions: &[surveyhero::markdown::Question],
         buf: &mut impl Write,
     ) -> color_eyre::Result<()> {
         writeln!(buf, "= Survey Questions and Answers\n")?;
@@ -41,7 +41,7 @@ impl TypstWriter {
         Ok(())
     }
     fn write_md_question(
-        question: &verifier::markdown::Question,
+        question: &surveyhero::markdown::Question,
         buf: &mut impl Write,
     ) -> color_eyre::Result<()> {
         writeln!(buf, "== {}\n", question.text)?;
@@ -98,7 +98,7 @@ impl TypstWriter {
     }
 
     fn write_question(
-        question: &verifier::api::Question,
+        question: &surveyhero::api::Question,
         buf: &mut impl Write,
     ) -> color_eyre::Result<()> {
         writeln!(buf, "== {}\n", question.text())?;
