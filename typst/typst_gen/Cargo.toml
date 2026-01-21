@@ -10,7 +10,6 @@ fern = {version =  "0.7.1", features = ["colored"] }
 humantime = "2.3.0"
 log = { version = "0.4.29", features = ["kv"] }
 surveyhero = { path = "../../surveyhero/" }
-miette = "7.6.0"
 typst = "0.14.2"
 typst-kit = "0.14.2"
 ureq = "3.1.4"
