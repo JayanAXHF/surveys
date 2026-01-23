@@ -21,10 +21,4 @@ pub enum Command {
         #[clap(long, short)]
         template_path: PathBuf,
     },
-    /// Generate typst from SurveyHero API
-    SurveyHero {
-        /// ID of the survey
-        #[clap(long)]
-        survey_id: usize,
-    },
 }

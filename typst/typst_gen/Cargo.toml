@@ -6,14 +6,8 @@ edition = "2024"
 [dependencies]
 clap = { version = "4.5.54", features = ["derive"] }
 color-eyre = "0.6.5"
-fern = {version =  "0.7.1", features = ["colored"] }
-humantime = "2.3.0"
-log = { version = "0.4.29", features = ["kv"] }
 surveyhero = { path = "../../surveyhero/" }
 typst = "0.14.2"
 typst-kit = "0.14.2"
-ureq = "3.1.4"
 time = "0.3.45"
-tar = "0.4.44"
-zune-inflate = "0.2.54"
 typst-pdf = "0.14.2"

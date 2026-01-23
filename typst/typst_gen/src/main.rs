@@ -1,8 +1,4 @@
-use std::time::SystemTime;
-
 use clap::Parser;
-use color_eyre::owo_colors::OwoColorize;
-use fern::colors::ColoredLevelConfig;
 use typst_pdf::PdfOptions;
 
 mod cli;
@@ -11,7 +7,6 @@ mod question_parser;
 mod typst_wrapper;
 
 fn main() -> color_eyre::Result<()> {
-    setup_logger()?;
     let cli = cli::Cli::parse();
     match &cli.command {
         cli::Command::Typst {
@@ -40,33 +35,6 @@ fn main() -> color_eyre::Result<()> {
             let pdf = typst_pdf::pdf(&doc, &PdfOptions::default()).expect("Error exporting PDF");
             std::fs::write(dist.join("main.pdf"), &pdf)?;
         }
-        _ => {
-            todo!()
-        }
     }
-    Ok(())
-}
-
-fn setup_logger() -> Result<(), fern::InitError> {
-    let colors = ColoredLevelConfig::new()
-        // use builder methods
-        .debug(fern::colors::Color::Magenta)
-        .info(fern::colors::Color::Green);
-    fern::Dispatch::new()
-        .format(move |out, message, record| {
-            out.finish(format_args!(
-                "{}{} {} {}{} {}",
-                "[".dimmed(),
-                humantime::format_rfc3339_seconds(SystemTime::now()).dimmed(),
-                colors.color(record.level()),
-                record.target().dimmed(),
-                ']'.dimmed(),
-                message
-            ))
-        })
-        .level(log::LevelFilter::Debug)
-        .chain(std::io::stdout())
-        .chain(fern::log_file("output.log")?)
-        .apply()?;
     Ok(())
 }

@@ -1,10 +1,13 @@
 use std::fmt::Write;
 
 use color_eyre::eyre::eyre;
-use surveyhero::{
-    api::Question,
-    markdown::{Answers, parse},
-};
+use surveyhero::markdown::{Answers, parse};
+
+const FONT_PRELUDE: &str = r#"
+#set text(
+  font: "Palatino",
+)
+"#;
 
 pub struct TypstWriter;
 
@@ -12,23 +15,9 @@ impl TypstWriter {
     pub fn typst_from_markdown(markdown: &str) -> color_eyre::Result<String> {
         let questions = parse(markdown).map_err(|e| eyre!("Error parsing markdown: {e}"))?;
         let mut buf = String::new();
-        buf.write_str(
-            r#"
-#set text(
-  font: "Palatino",
-)
-"#,
-        )?;
+        buf.write_str(FONT_PRELUDE)?;
         Self::write_md(&questions, &mut buf)?;
         Ok(buf)
-    }
-    #[allow(dead_code)]
-    pub fn write(questions: &[Question], buf: &mut impl Write) -> color_eyre::Result<()> {
-        writeln!(buf, "= Survey Questions and Answers\n")?;
-        for question in questions {
-            Self::write_question(question, buf)?;
-        }
-        Ok(())
     }
     pub fn write_md(
         questions: &[surveyhero::markdown::Question],
@@ -89,61 +78,6 @@ impl TypstWriter {
             Answers::InputList(inputs) => {
                 writeln!(buf, "Type: input list\n")?;
                 for input in inputs {
-                    writeln!(buf, "- {input}")?;
-                }
-            }
-        }
-        writeln!(buf)?;
-        Ok(())
-    }
-
-    fn write_question(
-        question: &surveyhero::api::Question,
-        buf: &mut impl Write,
-    ) -> color_eyre::Result<()> {
-        writeln!(buf, "== {}\n", question.text())?;
-        if !question.description_text().is_empty() {
-            writeln!(buf, "{}\n", question.description_text())?;
-        }
-        match question {
-            Question::Input { .. } => {
-                writeln!(buf, "Type: free form")?;
-            }
-            Question::ChoiceList { choice_list, .. } => {
-                if question.is_select_one() {
-                    writeln!(buf, "Type: select one")?;
-                } else {
-                    writeln!(buf, "Type: select all that apply")?;
-                }
-                writeln!(buf)?;
-
-                for variant in choice_list.as_strs() {
-                    writeln!(buf, "- {variant}")?;
-                }
-            }
-            Question::ChoiceTable { choice_table, .. } => {
-                writeln!(buf, "Type: matrix\n")?;
-                writeln!(buf, "Rows:\n")?;
-                for row in choice_table.rows_strs() {
-                    writeln!(buf, "- {row}")?;
-                }
-                writeln!(buf, "\nColumns:\n")?;
-                for col in choice_table.column_strs() {
-                    writeln!(buf, "- {col}")?;
-                }
-            }
-            Question::RatingScale { .. } => {
-                writeln!(buf, "Type: rating scale\n")?;
-            }
-            Question::Ranking { ranking, .. } => {
-                writeln!(buf, "Type: ranking\n")?;
-                for variant in ranking.as_strs() {
-                    writeln!(buf, "- {variant}")?;
-                }
-            }
-            Question::InputList { input_list, .. } => {
-                writeln!(buf, "Type: input list\n")?;
-                for input in input_list.as_strs() {
                     writeln!(buf, "- {input}")?;
                 }
             }

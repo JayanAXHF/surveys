@@ -1,14 +1,12 @@
 use std::{
     collections::HashMap,
-    io::Read,
     path::PathBuf,
     sync::{Arc, LazyLock, Mutex},
 };
 
 use typst::{
     Library, LibraryExt, World,
-    diag::{FileError, FileResult, PackageError, PackageResult},
-    ecow::eco_format,
+    diag::{FileError, FileResult, PackageResult},
     foundations::{Bytes, Datetime},
     syntax::{FileId, Source, package::PackageSpec},
     text::{Font, FontBook},
@@ -24,13 +22,6 @@ pub struct Typst {
     source: Source,
     book: LazyHash<FontBook>,
     fonts: Vec<FontSlot>,
-
-    /// Cache directory (e.g. where packages are downloaded to).
-    cache_directory: PathBuf,
-
-    /// http agent to download packages.
-    http: ureq::Agent,
-
     /// Datetime.
     time: time::OffsetDateTime,
 
@@ -70,62 +61,13 @@ impl Typst {
             book: LazyHash::new(fonts.book),
             fonts: fonts.fonts,
             time: time::OffsetDateTime::now_utc(),
-            cache_directory: std::env::var_os("CACHE_DIRECTORY")
-                .map(|os_path| os_path.into())
-                .unwrap_or(std::env::temp_dir()),
-            http: ureq::Agent::new_with_defaults(),
             files: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
     /// Downloads the package and returns the system path of the unpacked package.
-    fn download_package(&self, package: &PackageSpec) -> PackageResult<PathBuf> {
-        let package_subdir = format!("{}/{}/{}", package.namespace, package.name, package.version);
-        let path = self.cache_directory.join(package_subdir);
-
-        if path.exists() {
-            return Ok(path);
-        }
-
-        eprintln!("downloading {package}");
-        let url = format!(
-            "https://packages.typst.org/{}/{}-{}.tar.gz",
-            package.namespace, package.name, package.version,
-        );
-
-        let response = retry(|| {
-            let response = self
-                .http
-                .get(&url)
-                .call()
-                .map_err(|error| eco_format!("{error}"))?;
-
-            let status = response.status();
-            if !http_successful(status.into()) {
-                return Err(eco_format!(
-                    "response returned unsuccessful status code {status}",
-                ));
-            }
-
-            Ok(response)
-        })
-        .map_err(|error| PackageError::NetworkFailed(Some(error)))?;
-
-        let mut compressed_archive = Vec::new();
-        let body = response.into_body();
-        body.into_reader()
-            .read_to_end(&mut compressed_archive)
-            .map_err(|error| PackageError::NetworkFailed(Some(eco_format!("{error}"))))?;
-        let raw_archive = zune_inflate::DeflateDecoder::new(&compressed_archive)
-            .decode_gzip()
-            .map_err(|error| PackageError::MalformedArchive(Some(eco_format!("{error}"))))?;
-        let mut archive = tar::Archive::new(raw_archive.as_slice());
-        archive.unpack(&path).map_err(|error| {
-            _ = std::fs::remove_dir_all(&path);
-            PackageError::MalformedArchive(Some(eco_format!("{error}")))
-        })?;
-
-        Ok(path)
+    fn download_package(&self, _package: &PackageSpec) -> PackageResult<PathBuf> {
+        unimplemented!("Support for downloading packages is not implemented")
     }
     fn file(&self, id: FileId) -> FileResult<TypstFile> {
         let mut files = self.files.lock().map_err(|_| FileError::AccessDenied)?;
@@ -194,13 +136,4 @@ impl World for Typst {
         let time = self.time.checked_to_offset(offset)?;
         Some(Datetime::Date(time.date()))
     }
-}
-
-fn retry<T, E>(mut f: impl FnMut() -> Result<T, E>) -> Result<T, E> {
-    if let Ok(ok) = f() { Ok(ok) } else { f() }
-}
-
-fn http_successful(status: u16) -> bool {
-    // 2XX
-    status / 100 == 2
 }
