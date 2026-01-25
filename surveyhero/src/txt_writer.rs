@@ -7,37 +7,21 @@
 use crate::markdown::Question;
 use anyhow::Result;
 use std::io::Write;
-use std::{
-    io::Read,
-    path::{Path, PathBuf},
-};
+use std::{io::Read, path::Path};
 
-pub struct S2S<'a> {
-    source: &'a Path,
-    dist: PathBuf,
-}
+pub fn md_to_txt(source: &Path, dist: &Path) -> Result<()> {
+    let mut file = std::fs::File::open(source)?;
+    let mut contents = String::new();
+    assert!(dist.is_dir());
+    assert!(source.is_file());
+    file.read_to_string(&mut contents)?;
 
-impl<'a> S2S<'a> {
-    pub fn new(source: &'a Path, dist: PathBuf) -> Self {
-        Self { source, dist }
-    }
+    let questions = crate::markdown::parse(&contents)?;
+    let dist_file = dist.join(source.with_extension(".txt").file_name().unwrap());
+    let mut dist_file = std::fs::File::create(dist_file)?;
+    write_questions(&questions, &mut dist_file)?;
 
-    pub fn run(&self) -> Result<()> {
-        let mut file = std::fs::File::open(self.source)?;
-        let mut contents = String::new();
-        assert!(self.dist.is_dir());
-        assert!(self.source.is_file());
-        file.read_to_string(&mut contents)?;
-
-        let questions = crate::markdown::parse(&contents)?;
-        let dist_file = self
-            .dist
-            .join(self.source.with_extension(".txt").file_name().unwrap());
-        let mut dist_file = std::fs::File::create(dist_file)?;
-        write_questions(&questions, &mut dist_file)?;
-
-        Ok(())
-    }
+    Ok(())
 }
 
 pub fn write_questions(questions: &[Question<'_>], out: &mut impl Write) -> Result<()> {
