@@ -5,7 +5,7 @@ edition = "2024"
 
 [dependencies]
 clap = { version = "4.5.54", features = ["derive"] }
-color-eyre = "0.6.5"
+anyhow = "1.0.100"
 surveyhero = { path = "../../surveyhero/" }
 typst = "0.14.2"
 typst-kit = "0.14.2"

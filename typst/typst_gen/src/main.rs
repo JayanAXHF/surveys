@@ -6,7 +6,7 @@ mod cli;
 mod question_parser;
 mod typst_wrapper;
 
-fn main() -> color_eyre::Result<()> {
+fn main() -> anyhow::Result<()> {
     let cli = cli::Cli::parse();
     match &cli.command {
         cli::Command::Typst {

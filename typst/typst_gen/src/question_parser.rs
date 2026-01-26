@@ -1,6 +1,5 @@
 use std::fmt::Write;
 
-use color_eyre::eyre::eyre;
 use surveyhero::markdown::{Answers, parse};
 
 const FONT_PRELUDE: &str = r#"
@@ -12,8 +11,8 @@ const FONT_PRELUDE: &str = r#"
 pub struct TypstWriter;
 
 impl TypstWriter {
-    pub fn typst_from_markdown(markdown: &str) -> color_eyre::Result<String> {
-        let questions = parse(markdown).map_err(|e| eyre!("Error parsing markdown: {e}"))?;
+    pub fn typst_from_markdown(markdown: &str) -> anyhow::Result<String> {
+        let questions = parse(markdown)?;
         let mut buf = String::new();
         buf.write_str(FONT_PRELUDE)?;
         Self::write_md(&questions, &mut buf)?;
@@ -22,7 +21,7 @@ impl TypstWriter {
     pub fn write_md(
         questions: &[surveyhero::markdown::Question],
         buf: &mut impl Write,
-    ) -> color_eyre::Result<()> {
+    ) -> anyhow::Result<()> {
         writeln!(buf, "= Survey Questions and Answers\n")?;
         for question in questions {
             Self::write_md_question(question, buf)?;
@@ -32,7 +31,7 @@ impl TypstWriter {
     fn write_md_question(
         question: &surveyhero::markdown::Question,
         buf: &mut impl Write,
-    ) -> color_eyre::Result<()> {
+    ) -> anyhow::Result<()> {
         writeln!(buf, "== {}\n", question.text)?;
         match &question.answers {
             Answers::Matrix {
