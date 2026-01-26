@@ -1,10 +1,9 @@
 use std::fmt::Write;
-
 use surveyhero::markdown::{Answers, parse};
 
 const FONT_PRELUDE: &str = r#"
 #set text(
-  font: "Palatino",
+  font: "TeX Gyre Pagella",
 )
 "#;
 

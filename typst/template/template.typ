@@ -10,7 +10,7 @@
     y: 1.345in
 
   ))
-  set text(font: "Palatino")
+  set text(font: "TeX Gyre Pagella")
   place(
     top + left,
     image("rust-logo-blk.svg"),
@@ -46,7 +46,7 @@
   show outline.entry: set block(above: 1.2em)
   outline(title: text(size: 20pt, weight: 700)[Contents #v(1.2em)])
   pagebreak()
-  show heading.where(level: 1): set text(font: "Palatino", size: 20pt)
+  show heading.where(level: 1): set text(font: "TeX Gyre Pagella", size: 20pt)
   set heading(numbering: "I.") // For Level 1 headings (e.g., 1, 2, 3)
   set heading(numbering: "I.1.")
   set page(columns: 2)
