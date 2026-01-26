@@ -11,14 +11,10 @@ pub struct Cli {
 
     /// Path to the output txt file
     #[clap(short, long)]
-    pub dist: Option<PathBuf>,
+    pub dist: PathBuf,
 }
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
-    let dist = cli
-        .dist
-        .as_ref()
-        .map_or(cli.source.parent().unwrap(), |v| v);
-    md_to_txt(&cli.source, dist)
+    md_to_txt(&cli.source, &cli.dist)
 }
