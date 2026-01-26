@@ -6,9 +6,9 @@ use std::{
 
 use typst::{
     Library, LibraryExt, World,
-    diag::{FileError, FileResult, PackageResult},
+    diag::{FileError, FileResult},
     foundations::{Bytes, Datetime},
-    syntax::{FileId, Source, package::PackageSpec},
+    syntax::{FileId, Source},
     text::{Font, FontBook},
     utils::LazyHash,
 };
@@ -64,20 +64,13 @@ impl Typst {
             files: Arc::new(Mutex::new(HashMap::new())),
         }
     }
-
-    /// Downloads the package and returns the system path of the unpacked package.
-    fn download_package(&self, _package: &PackageSpec) -> PackageResult<PathBuf> {
-        unimplemented!("Support for downloading packages is not implemented")
-    }
     fn file(&self, id: FileId) -> FileResult<TypstFile> {
         let mut files = self.files.lock().map_err(|_| FileError::AccessDenied)?;
         if let Some(entry) = files.get(&id) {
             return Ok(entry.clone());
         }
-        let path = if let Some(package) = id.package() {
-            // Fetching file from package
-            let package_dir = self.download_package(package)?;
-            id.vpath().resolve(&package_dir)
+        let path = if id.package().is_some() {
+            unimplemented!("Support for downloading packages is not implemented")
         } else {
             // Fetching file from disk
             id.vpath().resolve(&self.root)
